@@ -95,6 +95,19 @@ def _to_complex(raw: np.ndarray, order: PairOrder) -> np.ndarray:
     return (a + 1j * b).astype(np.complex64)           # (real, imag)
 
 
+def _select_ltf(raw: np.ndarray, ltf: str) -> np.ndarray:
+    """Real ESP32 HT20 CSI is 256 int8 = 128 subcarriers: the 64-bin LLTF
+    followed by the 64-bin HT-LTF. Slice to one 64-subcarrier field.
+    (Synthetic / other layouts pass through unchanged.)"""
+    if raw.shape[1] != 256:
+        return raw
+    if ltf == "lltf":
+        return raw[:, :128]
+    if ltf == "both":
+        return raw
+    return raw[:, 128:]                                 # htltf (default)
+
+
 def detect_pair_order(raw: np.ndarray, active: np.ndarray) -> PairOrder:
     """Pick the interleaving that yields a causal power-delay profile.
 
@@ -129,7 +142,9 @@ def derive_active_subcarriers(raw_complex: np.ndarray, rel_threshold: float = 0.
     return active
 
 
-def load(path: str, pair_order: str | None = None) -> CSIRecording:
+def load(path: str, pair_order: str | None = None, ltf: str = "htltf") -> CSIRecording:
+    """`ltf`: which training field to use when the payload is the 256-int8
+    dual-LTF real-ESP32 layout -- "htltf" (default), "lltf", or "both"."""
     df = pd.read_csv(path)
     if "host_ts" not in df.columns:
         raise ValueError(f"{path}: missing host_ts column (not a capture CSV?)")
@@ -138,6 +153,7 @@ def load(path: str, pair_order: str | None = None) -> CSIRecording:
     raw = _parse_data_column(df["data"])
     if len(raw) != len(df):
         df = df.iloc[: len(raw)].reset_index(drop=True)
+    raw = _select_ltf(raw, ltf)
 
     # provisional complex (order-agnostic magnitude) to find active set
     provisional = _to_complex(raw, "im_re")

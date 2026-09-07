@@ -23,22 +23,31 @@ Synthetic demo data in `data/SYNTH_*`, figures in `results/`.
 Each ends at an **approval checkpoint**.
 
 - [~] **9. Phase 1 gate** -- toolchain + firmware + CSI stream
-  - [x] ESP-IDF v5.3.1 installed (`~/esp/esp-idf`); needed an `SSL_CERT_FILE`
-        workaround for the framework Python -- now baked into `bootstrap_esp_idf.sh`
-  - [x] esp-csi cloned (`~/esp/esp-csi`, rev 8633d67)
-  - [x] Read the real `csi_recv`/`csi_send` source. Findings: the get-started
-        examples use a **dedicated ESP-NOW link** (not SoftAP -- still satisfies
-        the "no router" constraint), default **HT40 on channel 11**, and the
-        ESP32 CSV branch **does not emit `agc_gain`**.
-  - [x] `firmware/patches/0001-*.patch` (+ `apply_patches.sh`): HT20, channel 6,
-        and adds `agc_gain`/`fft_gain` to the CSV while keeping CSI raw. Applies
-        cleanly to rev 8633d67. **Gain-API call is unverified until the first
-        build** -- fallback documented in `firmware/README.md`.
-  - [x] `serial_format.FIELD_SPEC` + synth updated to the real post-patch header;
-        31 tests still green.
-  - [ ] boards connected, both roles flashed, MACs recorded
-  - [ ] `idf.py monitor` shows a continuous CSI stream; real header line compared
-        to `FIELD_SPEC`; `test_serial_format.py` re-run against real lines
+  - [x] ESP-IDF v5.3.1 installed. `bootstrap_esp_idf.sh` now also handles two
+        macOS gaps it hit: `SSL_CERT_FILE` from certifi (framework Python), and
+        `idf_tools.py install cmake ninja` (install.sh doesn't pull them).
+  - [x] esp-csi cloned (rev 8633d67). The get-started examples use a **dedicated
+        ESP-NOW link** (not SoftAP -- still no router), default **HT40 / ch 11**.
+  - [x] `firmware/patches/0001-dedicated-link-ht20.patch` (+ `apply_patches.sh`):
+        HT20, channel 6. Applies cleanly to rev 8633d67.
+  - [x] Both boards flashed and running.
+        tx `68:09:47:26:ee:14` @ usbserial-0001, rx `68:09:47:9e:fd:a4` @ usbserial-5.
+  - [x] **CSI stream confirmed.** ~82-92 pkt/s, 0 malformed through `csi-capture`.
+  - [x] **Real serial format locked into `FIELD_SPEC`** (24 fields, no `agc_gain`).
+        Real quirks handled: `len=256` (LLTF+HT-LTF) -> `csi_io.load(ltf="htltf")`
+        slices to `(N,64)`; pair order derives to `re_im`; raw sample committed
+        at `data/REAL_probe_raw.txt`.
+  - [x] **Plain ESP32 has no AGC gain readout** -- `esp_csi_gain_ctrl` is an empty
+        lib for this target. `agc.py` reworked: `normalize_blind` removes a
+        smoothed common-mode level only when it swings >10% (measured ~6% on the
+        bench, so it is usually a no-op). Synth updated to match (no fake AGC
+        steps). 31 tests green.
+  - [x] End-to-end run on a real bench capture (`data/REAL_desk_probe.csv`):
+        csi_io / AGC / presence / respiration all run, presence ~0 on a static
+        bench.
+  - [ ] **still needed for the gate:** real 2 m link (antennas vertical/parallel,
+        floor taped) + the three labeled `empty`/`walking`/`sitting` recordings
+        with the heatmap contrast. Bench boards-on-desk is not the gate.
   - **approval checkpoint**
 - [ ] **10. Phase 2 gate** -- three labeled recordings (`empty` / `walking` /
       `sitting`, 2 m LOS); verify packet rate; AGC diagnostic flattens; three

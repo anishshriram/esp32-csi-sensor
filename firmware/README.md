@@ -35,23 +35,25 @@ antennas vertical and parallel.
 > with `CERTIFICATE_VERIFY_FAILED`. `bootstrap_esp_idf.sh` handles it by exporting
 > `SSL_CERT_FILE` from `certifi`; by hand: `export SSL_CERT_FILE=$(python3 -m certifi)`.
 
-## What the patch changes (`firmware/patches/0001-*.patch`)
+## What the patch changes (`firmware/patches/0001-dedicated-link-ht20.patch`)
 
 | Change | Stock | Patched | Why |
 |---|---|---|---|
 | WiFi channel (`#define CONFIG_LESS_INTERFERENCE_CHANNEL`) | 11 | 6 | fixed; scan 1/6/11 with a phone analyzer and pick least congested |
-| Bandwidth (`CONFIG_WIFI_BANDWIDTH`, `CONFIG_ESP_NOW_PHYMODE`) | HT40 | HT20 | HT40 changes subcarrier layout/indexing; HT20 = clean 64 subcarriers / 128 int8 |
-| CSI CSV (csi_recv, ESP32 branch) | no gain fields | adds `agc_gain`, `fft_gain`; CSI stays **raw** (`compensate_gain` = 1.0) | the host normalizes amplitude and validates it (Phase 2.3) -- impossible if firmware pre-compensates |
+| Bandwidth (`CONFIG_WIFI_BANDWIDTH`, `CONFIG_ESP_NOW_PHYMODE`) | HT40 | HT20 | HT40 changes subcarrier layout/indexing |
+| csi_recv `wifi_csi_config_t` | `manu_scale=false`, `shift=0` | same (comment only) | `manu_scale=true, shift=9` was tried and **saturated** the payload (`-128`/`127` walls); auto-scale is stable enough on a fixed link |
 
-Send rate stays 100 Hz (`CONFIG_SEND_FREQUENCY`). To change the channel later,
-edit the `#define` in both `app_main.c` files (it is not a Kconfig option).
+Send rate stays 100 Hz (`CONFIG_SEND_FREQUENCY`). Channel/BW are `#define`s in
+both `app_main.c` files, not Kconfig.
 
-> **Unverified until the first build:** `esp_csi_gain_ctrl_get_rx_gain()` is only
-> exercised by the stock example on S3/C3/C6. If it does not compile or link for
-> the plain `esp32` target, fall back to enabling `CONFIG_GAIN_CONTROL` for esp32
-> (add `|| CONFIG_IDF_TARGET_ESP32` at line ~47) and accept firmware-side gain
-> compensation -- then the host AGC step becomes validation-only. Note which path
-> you took here.
+> **AGC gain: not available on plain ESP32.** `esp_csi_gain_ctrl` ships an empty
+> prebuilt lib for `esp32` / `esp32s2` (the hardware has no gain readout), so
+> `esp_csi_gain_ctrl_get_rx_gain()` does not link and there is no `agc_gain`
+> field. Confirmed on the first build. The host handles this: `agc.py` treats
+> amplitude as gain-stable and applies `normalize_blind` (common-mode step
+> removal) when there is no `agc_gain` column. If a future recording shows real
+> AGC stepping, freeze it with `manu_scale=true` + a **low** `shift` (2-4, tuned
+> against the real signal level) rather than the value that saturated.
 
 ## menuconfig / sdkconfig
 
@@ -62,10 +64,39 @@ are **not** Kconfig here -- they come from the patch.
 
 ## Board register (fill in during bring-up)
 
-| Role | Board MAC | Serial port | esp-csi SHA | gain path (patched call / CONFIG_GAIN_CONTROL) |
+| Role | Chip MAC | Serial port | esp-csi SHA | flashed |
 |---|---|---|---|---|
-| tx (csi_send) | `??:??:??:??:??:??` | | 8633d67 | n/a |
-| rx (csi_recv) | `??:??:??:??:??:??` | | 8633d67 | |
+| tx (csi_send) | `68:09:47:26:ee:14` | `/dev/tty.usbserial-0001` | 8633d67 | yes |
+| rx (csi_recv) | `68:09:47:9e:fd:a4` | `/dev/tty.usbserial-5` | 8633d67 | yes |
+
+Both are ESP32-D0WD-V3 rev v3.1. The esp-csi example overrides the STA MAC to
+`1a:00:00:00:00:00` on both, so on-air frames carry that, not the chip MACs.
+
+## Confirmed serial format (bench capture, boards on desk)
+
+Header line the example prints on ESP32 (matches `FIELD_SPEC`, 24 fields + data):
+
+```
+type,id,mac,rssi,rate,sig_mode,mcs,bandwidth,smoothing,not_sounding,aggregation,
+stbc,fec_coding,sgi,noise_floor,ampdu_cnt,channel,secondary_channel,
+local_timestamp,ant,sig_len,rx_format,len,first_word,data
+```
+
+Real line:
+```
+CSI_DATA,12719,1a:00:00:00:00:00,-1,11,1,0,0,1,1,0,0,0,0,-96,0,6,0,17122706,0,47,1,256,1,"[47,-16,2,0,-128,...]"
+```
+
+- **`len = 256`** -> 128 subcarriers: a 64-bin LLTF followed by a 64-bin HT-LTF.
+  `csi_io.load(..., ltf="htltf")` (default) slices the HT-LTF half -> `(N, 64)`.
+- Pair order for the HT-LTF half comes out **`re_im`** (derived, logged) --
+  opposite the documented LLTF `(imag, real)`, which is exactly why we derive it.
+- `first_word = 1` on many packets; the first int8 quad `47,-16,2,0` is the
+  invalid first word -- it lands in the DC/guard null region and is dropped by
+  the active-subcarrier derivation anyway.
+- Packet rate ~82-92 Hz at the bench (sender at 100). Above the 50 Hz floor;
+  retune later if it drops under load.
+- A raw sample is committed at `data/REAL_probe_raw.txt`.
 
 Note: `csi_recv` filters on the **sender payload id**, not the real sender MAC --
 both boards set their STA MAC to `1a:00:00:00:00:00` in the example. Record the

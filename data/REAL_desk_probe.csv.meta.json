@@ -1,0 +1,14 @@
+{
+  "label": "probe",
+  "channel": 6,
+  "board_separation_m": 0.1,
+  "wall_present": false,
+  "subject_position": "boards on desk, static",
+  "start_time": 1788817292.355544,
+  "firmware_sha": "unknown",
+  "notes": "bench bringup, not a real link",
+  "synthetic": false,
+  "rows": 2772,
+  "duration_s": 30.008162021636963,
+  "mean_pkt_rate_hz": 92.37486781100716
+}

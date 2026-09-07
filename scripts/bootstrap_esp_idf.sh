@@ -33,6 +33,9 @@ fi
 
 ./install.sh esp32
 
+# install.sh does not pull cmake/ninja on macOS -- idf.py needs them on PATH.
+python tools/idf_tools.py install cmake ninja
+
 cat <<'EOF'
 
 --------------------------------------------------------------------

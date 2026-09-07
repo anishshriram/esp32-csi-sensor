@@ -106,11 +106,15 @@ cd deploy && docker compose up -d && cd ..
 
 | stage | result on synthetic data |
 |---|---|
-| I/Q order + active set | recovered exactly for both interleavings |
-| AGC normalization | flattens injected gain steps (5-20x CV reduction) |
+| I/Q order + active set | derived from data for both interleavings; logged |
+| AGC (blind) | removes a stepped common-mode level, ~2.6x CV reduction on a static clip |
 | presence -- walking | ~99% accuracy, <1 s latency, <5% FPR |
 | presence -- sitting | variance alone misses it (documented); `--respiration-assist` -> ~100% |
 | respiration | MAE < 0.3 bpm over the 10/12/15/18/20 metronome set |
 | through-wall | confidence and presence accuracy drop in the right direction |
 
-Real-hardware numbers replace these as Stage B recordings come in.
+Real hardware so far: both ESP32 boards flashed (ESP-NOW link, HT20, ch 6), CSI
+streaming at ~85 Hz, format locked into `FIELD_SPEC`, full pipeline runs on a
+real bench capture. The plain ESP32 exposes no `agc_gain`, so amplitude
+normalization is blind (`agc.normalize_blind`). Real Stage-B metrics land as the
+2 m link recordings come in.

@@ -20,7 +20,8 @@ def test_capture_replay_then_pipeline(tmp_path):
     assert summary["malformed"] == 0
     captured = csi_io.load(str(out))
     assert captured.n == len(lines)
-    assert "agc_gain" in captured.meta.columns
+    for f in ("host_ts", "noise_floor", "rssi", "channel"):
+        assert f in captured.meta.columns          # rx_ctrl fields kept at parse
 
     # the pipeline runs on a capture CSV with a real (jittered) time base
     synth_csv = tmp_path / "synth.csv"

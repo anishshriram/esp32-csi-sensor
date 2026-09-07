@@ -2,23 +2,25 @@
 
 THE FIELD ORDER BELOW IS A DEFAULT, NOT GROUND TRUTH.
 It matches the `csi_recv` get-started example of espressif/esp-csi (rev 8633d67,
-ESP32 / non-C6 branch) **with the local patch applied** (see
-`firmware/patches/` -- the patch adds `agc_gain` + `fft_gain`, which the stock
-ESP32 branch does not print, and switches the link to HT20 on a fixed channel).
-
-During Phase 1 bring-up, capture a real line with `csi-capture --dump-raw` and
-compare it field-by-field against `FIELD_SPEC`. Edit this one list if it differs
--- everything downstream reads through this module.
-
-Stock ESP32 header line (before the patch, for reference):
+ESP32 / non-C6 branch). The `firmware/patches/` change is CSI-config only (HT20,
+fixed channel, frozen RX scaling) and does NOT touch the CSV line, so the header
+below is exactly what the stock example prints on ESP32:
 
     type,id,mac,rssi,rate,sig_mode,mcs,bandwidth,smoothing,not_sounding,
     aggregation,stbc,fec_coding,sgi,noise_floor,ampdu_cnt,channel,
     secondary_channel,local_timestamp,ant,sig_len,rx_format,len,first_word,data
 
-The patch inserts `agc_gain,fft_gain` just before `len`. The trailing `data`
-field is a bracketed list of `len` signed 8-bit values, two per subcarrier; the
-pair order (imag,real vs real,imag) is NOT resolved here -- csi_io derives it.
+Note: the plain ESP32 does NOT expose an AGC gain readout (`esp_csi_gain_ctrl`
+is a stub for this target), so there is no `agc_gain` field. Instead the firmware
+patch sets `manu_scale=true` to freeze the receiver scaling; the host treats
+amplitude as already gain-stable and applies a blind step-removal fallback
+(`agc.normalize_blind`) if drift is still visible.
+
+During Phase 1 bring-up, capture a real line with `csi-capture --dump-raw` and
+compare it field-by-field against `FIELD_SPEC`. Edit this one list if it differs
+-- everything downstream reads through this module. The trailing `data` field is
+a bracketed list of `len` int8 values, two per subcarrier; pair order
+(imag,real vs real,imag) is NOT resolved here -- csi_io derives it.
 """
 from __future__ import annotations
 
@@ -49,8 +51,6 @@ FIELD_SPEC: list[tuple[str, Callable[[str], object]]] = [
     ("ant", int),
     ("sig_len", int),
     ("rx_format", int),          # stock branch prints sig_mode again in this slot
-    ("agc_gain", int),           # ADDED BY PATCH -- required for amplitude normalization
-    ("fft_gain", int),           # ADDED BY PATCH
     ("len", int),                # number of int8 CSI values (2 per subcarrier)
     ("first_word", int),         # first_word_invalid flag
 ]
