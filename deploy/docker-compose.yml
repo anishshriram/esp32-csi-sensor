@@ -1,0 +1,53 @@
+# Phase 6 dashboard stack: Mosquitto (MQTT) -> InfluxDB -> Grafana.
+#
+#   cd deploy && docker compose up -d
+#   # then, from the repo root, feed metrics in:
+#   csi-live --replay ../data/SYNTH_mixed_los_2m.csv --speed 4 \
+#            --mqtt localhost --topic csi/metrics
+#
+# Grafana:  http://localhost:3000  (admin / admin)
+# InfluxDB: http://localhost:8086   (admin / csisensor123, org "csi", bucket "metrics")
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports: ["1883:1883"]
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  influxdb:
+    image: influxdb:2.7
+    ports: ["8086:8086"]
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: csisensor123
+      DOCKER_INFLUXDB_INIT_ORG: csi
+      DOCKER_INFLUXDB_INIT_BUCKET: metrics
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: csi-sensor-dev-token
+    volumes:
+      - influx-data:/var/lib/influxdb2
+
+  mqtt-to-influx:
+    build:
+      context: ..
+      dockerfile: deploy/bridge.Dockerfile
+    command: >
+      python -m deploy.mqtt_to_influx
+      --broker mosquitto --topic csi/metrics
+      --influx http://influxdb:8086 --token csi-sensor-dev-token
+      --org csi --bucket metrics
+    depends_on: [mosquitto, influxdb]
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    ports: ["3000:3000"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on: [influxdb]
+
+volumes:
+  influx-data:
