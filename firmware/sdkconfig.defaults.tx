@@ -1,0 +1,22 @@
+# esp-csi TRANSMITTER (SoftAP) defaults -- Phase 1.
+# Applied by scripts/build_firmware.sh. Keys vary between esp-csi revisions; if
+# one is rejected, set the equivalent in `idf.py menuconfig` and update this file.
+
+CONFIG_IDF_TARGET="esp32"
+
+# --- serial ---
+CONFIG_ESP_CONSOLE_UART_BAUDRATE=921600
+CONFIG_ESPTOOLPY_MONITOR_BAUD=921600
+
+# --- WiFi: SoftAP on a fixed channel, 20 MHz ---
+CONFIG_ESP_WIFI_SOFTAP_SSID="csi_link"
+CONFIG_ESP_WIFI_SOFTAP_PASSWORD="csi_link_pw"
+CONFIG_ESP_WIFI_CHANNEL=6
+CONFIG_ESP_WIFI_SOFTAP_MAX_STA_CONN=1
+
+# The transmitter just needs to beacon + ACK so the receiver has a steady packet
+# source to measure. Some esp-csi examples send explicit ping/null frames from
+# here at the configured rate -- keep that rate at the target 100 Hz.
+
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=240

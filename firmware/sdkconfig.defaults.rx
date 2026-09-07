@@ -1,0 +1,27 @@
+# esp-csi RECEIVER (STA) defaults -- Phase 1.
+# Applied by scripts/build_firmware.sh. Keys vary between esp-csi revisions; if
+# one is rejected, set the equivalent in `idf.py menuconfig` and update this file.
+
+CONFIG_IDF_TARGET="esp32"
+
+# --- serial ---
+CONFIG_ESP_CONSOLE_UART_BAUDRATE=921600
+CONFIG_ESPTOOLPY_MONITOR_BAUD=921600
+
+# --- WiFi: fixed channel, 20 MHz, STA joining the paired SoftAP ---
+# Set the SoftAP SSID/password to match sdkconfig.defaults.tx.
+CONFIG_ESP_WIFI_SOFTAP_SSID="csi_link"
+CONFIG_ESP_WIFI_SOFTAP_PASSWORD="csi_link_pw"
+CONFIG_ESP_WIFI_CHANNEL=6
+
+# HT20 only (no HT40 / no channel bonding)
+CONFIG_ESP_PHY_ENABLE_USB=n
+
+# --- CSI ---
+CONFIG_ESP_WIFI_CSI_ENABLED=y
+
+# --- performance: keep the 100 Hz stream from stalling ---
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+CONFIG_FREERTOS_HZ=1000
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=240
