@@ -1,0 +1,3 @@
+path,config,distance_m,truth_bpm,empty_path,present_intervals
+data/SYNTH_sitting_los_2m.csv,los,2.0,15,data/SYNTH_empty_los_2m.csv,"[[0, 180]]"
+data/SYNTH_sitting_wall_2m.csv,wall,2.0,15,data/SYNTH_empty_wall_2m.csv,"[[0, 160]]"
