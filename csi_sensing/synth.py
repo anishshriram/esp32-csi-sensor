@@ -187,25 +187,37 @@ def generate(cfg: SynthConfig) -> SynthResult:
         drift += rng.uniform(0.4, 1.0) * np.sin(2 * np.pi * fr * times + ph)
     drift = 0.006 * drift / (np.std(drift) + 1e-9)   # ~6 mm rms common wander
 
-    # Fixed hardware scale for the whole recording. It must NOT be recomputed per
-    # packet -- that would divide the AGC gain back out and the normalization step
-    # would have nothing to correct. Calibrate once from a gain-free reference
-    # packet so a typical active bin sits mid-range in int8.
-    ref_amps, ref_delays = _paths_at(0.0, cfg, rng, {})
-    ref_H = (ref_amps[None, :] * np.exp(-2j * np.pi * np.outer(f_k, ref_delays))).sum(axis=1)
-    hw_scale = 55.0 / (np.median(np.abs(ref_H[active_mask])) + 1e-9)
-
+    # Pass 1: synthesize the true channel H for every packet.
+    H_all = np.empty((len(times), N_SUB), dtype=np.complex128)
     for seq, t in enumerate(times):
         amps, delays = _paths_at(t, cfg, rng, walk_state, drift=float(drift[seq]))
-        # H[k] = sum_p a_p exp(-j 2 pi f_k tau_p)
         phasors = amps[None, :] * np.exp(-2j * np.pi * np.outer(f_k, delays))
-        H = phasors.sum(axis=1)
-        H[~active_mask] = 0.0
+        h = phasors.sum(axis=1)
+        h[~active_mask] = 0.0
+        H_all[seq] = h
 
-        gain = 10 ** (_agc_gain_db(t, cfg) / 20.0)
+    true_power = np.median(np.abs(H_all[:, active_mask]), axis=1)   # per-packet
+
+    # RSSI reflects the TRUE received power (dBm-ish).
+    rssi_series = 20 * np.log10(true_power / np.median(true_power) + 1e-9)
+    rssi_series += -30 - (cfg.wall_atten_db if cfg.wall else 0)
+
+    # The ESP32 front-end AGC normalizes CSI magnitude toward a target, tracking
+    # slowly (~2 s). Slow power changes are divided out (CSI amplitude does NOT
+    # follow them -- matches real hardware); fast breathing/motion ripple partly
+    # survives. `agc_gain` is NOT reported on plain ESP32.
+    from scipy.ndimage import uniform_filter1d
+
+    fs_eff = len(times) / max(1.0, cfg.duration)
+    tracked = uniform_filter1d(true_power, max(3, int(2.0 * fs_eff)), mode="nearest")
+    agc_series = 1.0 / (tracked / np.median(tracked) + 1e-9)
+    hw_scale = 55.0 / np.median(true_power * agc_series)
+
+    for seq, t in enumerate(times):
+        H = H_all[seq]
         noise = (rng.normal(0, noise_sigma, N_SUB) + 1j * rng.normal(0, noise_sigma, N_SUB))
         noise[~active_mask] = 0.0
-        obs = (H + noise) * gain * hw_scale
+        obs = (H + noise) * agc_series[seq] * hw_scale
 
         re = np.clip(np.round(obs.real), -128, 127).astype(np.int8)
         im = np.clip(np.round(obs.imag), -128, 127).astype(np.int8)
@@ -225,7 +237,7 @@ def generate(cfg: SynthConfig) -> SynthResult:
                 "type": "CSI_DATA",
                 "id": seq,
                 "mac": cfg.mac,
-                "rssi": int(-40 - (cfg.wall_atten_db if cfg.wall else 0) + rng.integers(-2, 3)),
+                "rssi": int(round(rssi_series[seq] + rng.normal(0, 0.4))),
                 "rate": 11,
                 "sig_mode": 1,
                 "mcs": 7,

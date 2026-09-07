@@ -1,0 +1,14 @@
+{
+  "label": "empty",
+  "channel": 6,
+  "board_separation_m": 3.86,
+  "wall_present": false,
+  "subject_position": "nobody in room",
+  "start_time": 1788821861.3233018,
+  "firmware_sha": "unknown",
+  "notes": "manu_scale shift=3; boards ~12ft8in apart ~4ft high; antennas vertical parallel; ch6 ESP-NOW HT20",
+  "synthetic": false,
+  "rows": 5283,
+  "duration_s": 60.024405002593994,
+  "mean_pkt_rate_hz": 88.01420022025528
+}

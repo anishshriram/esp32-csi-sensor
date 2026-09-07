@@ -1,0 +1,14 @@
+{
+  "label": "sitting",
+  "channel": 6,
+  "board_separation_m": 3.86,
+  "wall_present": false,
+  "subject_position": "subject sitting still between the boards on the link line, normal breathing",
+  "start_time": 1788822165.77807,
+  "firmware_sha": "unknown",
+  "notes": "manu_scale shift=3; boards ~12ft8in apart ~4ft high; antennas vertical parallel; ch6 ESP-NOW HT20",
+  "synthetic": false,
+  "rows": 5614,
+  "duration_s": 60.02183294296265,
+  "mean_pkt_rate_hz": 93.5326317897498
+}

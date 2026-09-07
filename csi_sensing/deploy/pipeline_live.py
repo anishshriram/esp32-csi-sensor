@@ -28,7 +28,10 @@ BAUD = 921_600
 def _serial_lines(port: str) -> Iterator[str]:
     import serial
 
-    ser = serial.Serial(port, BAUD, timeout=1)
+    ser = serial.Serial()          # open without toggling DTR/RTS -> no board reset
+    ser.port, ser.baudrate, ser.timeout = port, BAUD, 1
+    ser.dtr = ser.rts = False
+    ser.open()
     try:
         while True:
             raw = ser.readline()
@@ -144,10 +147,7 @@ def run(source, *, is_serial: bool, buffer_s: float = 90.0, emit_every: float = 
 
 def _adaptive_threshold(rec: csi_io.CSIRecording, cfg: presence.PresenceConfig) -> float:
     """No dedicated empty file live: use the quietest 20% of windows as baseline."""
-    from csi_sensing.agc import normalized_amplitude
-
-    amp = normalized_amplitude(rec, active_only=True)
-    _, score = presence.motion_score(amp, rec.host_ts - rec.host_ts[0], cfg)
+    _, score = presence._score(rec, cfg)
     quiet = np.sort(score)[: max(3, len(score) // 5)]
     return presence.threshold_from_baseline(quiet, cfg.threshold_k)
 

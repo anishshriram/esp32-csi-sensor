@@ -35,6 +35,18 @@ antennas vertical and parallel.
 > with `CERTIFICATE_VERIFY_FAILED`. `bootstrap_esp_idf.sh` handles it by exporting
 > `SSL_CERT_FILE` from `certifi`; by hand: `export SSL_CERT_FILE=$(python3 -m certifi)`.
 
+Gotchas from bring-up:
+- Port name is not stable per board -- after unplug/replug the two CP210x chips
+  swap between `usbserial-0001` and `usbserial-5`. Identify by chip MAC
+  (`esptool.py read_mac`), not port name.
+- A flaky USB port gives `Download mode detected ... TX path seems to be down`
+  on flash -- try a different port.
+- `csi-capture` opens without toggling DTR/RTS and waits out the boot log, so it
+  will not reset or wedge the board.
+- A power bank may auto-shut-off the transmitter (~100 mA draw). Use wall USB or
+  a bank with a low-current mode; don't pass-through-charge the bank while it
+  powers the board.
+
 ## What the patch changes (`firmware/patches/0001-dedicated-link-ht20.patch`)
 
 | Change | Stock | Patched | Why |
@@ -46,14 +58,18 @@ antennas vertical and parallel.
 Send rate stays 100 Hz (`CONFIG_SEND_FREQUENCY`). Channel/BW are `#define`s in
 both `app_main.c` files, not Kconfig.
 
-> **AGC gain: not available on plain ESP32.** `esp_csi_gain_ctrl` ships an empty
-> prebuilt lib for `esp32` / `esp32s2` (the hardware has no gain readout), so
-> `esp_csi_gain_ctrl_get_rx_gain()` does not link and there is no `agc_gain`
-> field. Confirmed on the first build. The host handles this: `agc.py` treats
-> amplitude as gain-stable and applies `normalize_blind` (common-mode step
-> removal) when there is no `agc_gain` column. If a future recording shows real
-> AGC stepping, freeze it with `manu_scale=true` + a **low** `shift` (2-4, tuned
-> against the real signal level) rather than the value that saturated.
+> **AGC gain: not available, and CSI amplitude is AGC-flattened.**
+> `esp_csi_gain_ctrl` ships an empty lib for `esp32`/`esp32s2` (no gain readout),
+> so there is no `agc_gain` field. `manu_scale`/`shift` only sets a *digital*
+> left-shift of the final CSI values -- the RF front-end AGC upstream still
+> normalizes amplitude, so **CSI magnitude barely tracks a person crossing the
+> path** (measured: walking vs empty CSI-amplitude variance ~identical). RSSI,
+> in the same line, swings ~20 dB per crossing -- that is the presence signal
+> the host uses (`presence.motion_score` with `rssi=`). `manu_scale=true,
+> shift=3` is kept in the patch only for a cleaner int8 range at this link's
+> RSSI (~-28 dBm); `shift=9` and `shift=4` both saturated. Re-tune `shift` if
+> the link RSSI changes a lot. `agc.normalize_blind` still cleans slow
+> common-mode drift out of the amplitude for the respiration stage.
 
 ## menuconfig / sdkconfig
 

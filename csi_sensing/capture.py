@@ -71,12 +71,24 @@ def build_meta(args) -> dict:
 
 
 def open_serial(port: str):
+    """Open the port WITHOUT resetting the board.
+
+    pyserial asserts DTR/RTS on open, which drives the ESP32 dev-board auto-reset
+    circuit (EN + GPIO0) and can wedge it. Hold both low and leave them.
+    """
     try:
         import serial  # pyserial
     except ImportError:  # pragma: no cover
         sys.exit("pyserial not installed: pip install pyserial")
     try:
-        return serial.Serial(port, BAUD, timeout=1)
+        ser = serial.Serial()
+        ser.port = port
+        ser.baudrate = BAUD
+        ser.timeout = 1
+        ser.dtr = False
+        ser.rts = False
+        ser.open()
+        return ser
     except Exception as exc:  # noqa: BLE001
         sys.exit(f"cannot open {port} @ {BAUD}: {exc}\n"
                  f"(is `idf.py monitor` still running? is the board plugged in?)")
@@ -101,6 +113,28 @@ def capture(port: str, duration: float, out_path: str, meta: dict,
         else:
             ser = open_serial(port)
             line_iter = None
+            # Opening the port can reset the board. Wait out the boot log and
+            # only start the timed window once CSI is flowing *cleanly* -- a run
+            # of consecutive CSI lines with no interleaved log output.
+            settle_deadline = time.time() + 8.0
+            clean_run = 0
+            total_csi = 0
+            while time.time() < settle_deadline:
+                raw = ser.readline()
+                if not raw:
+                    continue
+                if raw.startswith(b"CSI_DATA"):
+                    clean_run += 1
+                    total_csi += 1
+                    if clean_run >= 60:        # ~0.6 s of uninterrupted CSI
+                        break
+                else:
+                    clean_run = 0
+            if total_csi < 20:
+                print("WARNING: no steady CSI within 8 s of opening the port "
+                      "(transmitter down? board wedged? -- power-cycle both)")
+            ser.reset_input_buffer()
+            t_start = time.time()
 
         try:
             while True:

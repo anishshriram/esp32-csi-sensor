@@ -87,7 +87,9 @@ def parse_line(line: str, stats: Optional[ParseStats] = None) -> Optional[dict]:
     a CSI row but did not parse) or `non_csi` (some other log line).
     """
     line = line.strip()
-    if not line or not line.startswith(LINE_PREFIX):
+    if not line:
+        return None                       # blank line / bare CR-LF -- not counted
+    if not line.startswith(LINE_PREFIX):
         if stats is not None:
             stats.non_csi += 1
         return None

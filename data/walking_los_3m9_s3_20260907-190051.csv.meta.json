@@ -1,0 +1,14 @@
+{
+  "label": "walking",
+  "channel": 6,
+  "board_separation_m": 3.86,
+  "wall_present": false,
+  "subject_position": "subject walking back and forth across the link, full crossings",
+  "start_time": 1788822051.636336,
+  "firmware_sha": "unknown",
+  "notes": "manu_scale shift=3; boards ~12ft8in apart ~4ft high; antennas vertical parallel; ch6 ESP-NOW HT20",
+  "synthetic": false,
+  "rows": 5379,
+  "duration_s": 60.025954246520996,
+  "mean_pkt_rate_hz": 89.61123679781831
+}

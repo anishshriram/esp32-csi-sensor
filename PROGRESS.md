@@ -45,10 +45,22 @@ Each ends at an **approval checkpoint**.
   - [x] End-to-end run on a real bench capture (`data/REAL_desk_probe.csv`):
         csi_io / AGC / presence / respiration all run, presence ~0 on a static
         bench.
-  - [ ] **still needed for the gate:** real 2 m link (antennas vertical/parallel,
-        floor taped) + the three labeled `empty`/`walking`/`sitting` recordings
-        with the heatmap contrast. Bench boards-on-desk is not the gate.
-  - **approval checkpoint**
+  - [x] Link set up: ~3.86 m LOS, boards ~1.2 m high, antennas vertical/parallel,
+        ch 6, ~90 pkt/s. Transmitter on wall power (its power bank auto-shut-off).
+  - [x] Three labeled recordings: `data/{empty,walking,sitting}_los_3m9_s3_*.csv`
+        (60 s each, 88-94 Hz, 0-1 malformed).
+  - **RF finding:** even with `manu_scale`, ESP32 CSI *amplitude* is AGC-flattened
+    by the RF front end and barely moves when a person crosses the path.
+    **RSSI does** (empty std 0.6 dB, walking std 3.3 dB with -20 dB crossing
+    dips). Presence detection re-keyed onto RSSI windowed-std + CSI variance;
+    `manu_scale=true, shift=3` kept only for a cleaner int8 range (0.2% clip).
+  - **Phase 2 gate MET:** walking heatmap shows the periodic crossings clearly
+    vs a flat empty; motion score separates ~5x (empty median 0.6, walking 3.1).
+  - **Phase 3 (early):** walking 100% detect / 0% empty FP; sitting needs
+    `--respiration-assist` (documented hard case) -> ~94%.
+  - **approval checkpoint** -- recordings collected, gate demonstrated. Longer
+    labeled sessions (15-30 min mixed, entry/exit log) still needed for a
+    scored Phase 3 accuracy/latency number.
 - [ ] **10. Phase 2 gate** -- three labeled recordings (`empty` / `walking` /
       `sitting`, 2 m LOS); verify packet rate; AGC diagnostic flattens; three
       heatmaps show the walking-vs-empty contrast.

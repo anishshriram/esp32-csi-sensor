@@ -1,9 +1,16 @@
 """Phase 3 -- presence detection.
 
-Motion sharply raises the short-time variance of the AGC-normalized amplitude
-across active subcarriers. Threshold that variance (level set from an `empty`
-recording's noise floor, not by eye), then debounce so the output does not
-chatter at the boundary.
+Motion raises the short-time variability of the link. Two signals are combined:
+
+  * **RSSI** short-time std -- the primary cue on plain ESP32. The CSI amplitude
+    is AGC-normalized in the RF front-end and barely tracks a person crossing the
+    path, but RSSI (one value per packet) swings ~20 dB on each crossing. Empty
+    RSSI std ~0.6 dB, walking ~3 dB.
+  * **CSI** relative-amplitude windowed variance -- secondary; catches finer
+    disturbance the RSSI quantization (1 dB) misses.
+
+The threshold is set from an `empty` recording's noise floor, not by eye, then a
+debounce keeps the output from chattering at the boundary.
 
 A still subject is much harder than a moving one -- report `walking` and
 `sitting` performance separately (see analysis/characterize.py and metrics).
@@ -32,23 +39,34 @@ class PresenceConfig:
     debounce_s: float = 3.0         # min dwell in a state before it flips
 
 
-def motion_score(amp_norm: np.ndarray, t: np.ndarray, cfg: PresenceConfig):
-    """Sliding-window mean over subcarriers of per-subcarrier variance.
-
-    Returns (t_windows, score). `amp_norm` is (N, S), `t` is (N,) seconds.
-    """
+def _windows(t: np.ndarray, cfg: PresenceConfig):
     fs = (len(t) - 1) / (t[-1] - t[0])
     win = max(2, int(round(cfg.window_s * fs)))
     hop = max(1, int(round(cfg.hop_s * fs)))
-    # normalize each subcarrier to its own mean so strong bins don't dominate
-    rel = amp_norm / (np.mean(amp_norm, axis=0, keepdims=True) + 1e-12)
     starts = np.arange(0, len(t) - win + 1, hop)
-    score = np.empty(len(starts))
-    tw = np.empty(len(starts))
-    for i, s in enumerate(starts):
-        seg = rel[s : s + win]
-        score[i] = np.mean(np.var(seg, axis=0))
-        tw[i] = t[s + win // 2]
+    tw = np.array([t[s + win // 2] for s in starts])
+    return starts, win, tw
+
+
+def motion_score(amp_norm: np.ndarray, t: np.ndarray, cfg: PresenceConfig,
+                 rssi: np.ndarray | None = None):
+    """Sliding-window motion score.
+
+    `amp_norm` is (N, S) AGC-normalized amplitude, `t` is (N,) seconds. If `rssi`
+    (N,) is given, its windowed std (dB) dominates the score -- that is the
+    reliable cue on plain ESP32. Returns (t_windows, score).
+    """
+    starts, win, tw = _windows(t, cfg)
+    rel = amp_norm / (np.mean(amp_norm, axis=0, keepdims=True) + 1e-12)
+    csi = np.array([np.mean(np.var(rel[s : s + win], axis=0)) for s in starts])
+
+    if rssi is None:
+        return tw, csi
+    r = np.asarray(rssi, dtype=float)
+    rssi_std = np.array([r[s : s + win].std() for s in starts])
+    # RSSI std in dB is the headline term; add a small CSI contribution scaled to
+    # a comparable range so it can only help, not dominate.
+    score = rssi_std + 4.0 * csi
     return tw, score
 
 
@@ -111,10 +129,21 @@ def respiration_presence(rec: csi_io.CSIRecording, tw: np.ndarray,
     return flags
 
 
+def _rssi_of(rec: csi_io.CSIRecording) -> np.ndarray | None:
+    if "rssi" not in rec.meta.columns:
+        return None
+    r = rec.meta["rssi"].to_numpy(dtype=float)
+    return r if np.ptp(r) > 0 else None
+
+
+def _score(rec: csi_io.CSIRecording, cfg: PresenceConfig):
+    amp = normalized_amplitude(rec, active_only=True)
+    return motion_score(amp, rec.host_ts - rec.host_ts[0], cfg, rssi=_rssi_of(rec))
+
+
 def detect(rec: csi_io.CSIRecording, cfg: PresenceConfig, threshold: float,
            respiration_assist: bool = False):
-    amp = normalized_amplitude(rec, active_only=True)
-    tw, score = motion_score(amp, rec.host_ts - rec.host_ts[0], cfg)
+    tw, score = _score(rec, cfg)
     raw_flags = score > threshold
     if respiration_assist:
         raw_flags = raw_flags | respiration_presence(rec, tw, cfg)
@@ -123,8 +152,7 @@ def detect(rec: csi_io.CSIRecording, cfg: PresenceConfig, threshold: float,
 
 
 def calibrate_threshold(empty_rec: csi_io.CSIRecording, cfg: PresenceConfig) -> float:
-    amp = normalized_amplitude(empty_rec, active_only=True)
-    _, score = motion_score(amp, empty_rec.host_ts - empty_rec.host_ts[0], cfg)
+    _, score = _score(empty_rec, cfg)
     return threshold_from_baseline(score, cfg.threshold_k)
 
 
