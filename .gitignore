@@ -1,0 +1,25 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# Build / scratch outputs
+out/
+build/
+
+# Generated figures and analysis outputs (regenerate with the plot scripts)
+results/
+
+# ESP-IDF (installed under ~/esp, never vendored here)
+esp-idf/
+esp-csi/
+
+# OS
+.DS_Store
+
+# Synthetic recordings are regenerable -- `make synth-data` (scripts/make_synth_data.sh).
+# REAL recordings ARE committed (they cost a physical session): keep data/*.csv
+# that are not SYNTH_*.
+data/SYNTH_*

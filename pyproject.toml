@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "csi-sensing"
+version = "0.1.0"
+description = "Through-wall WiFi CSI sensing: presence detection and respiration estimation from ESP32 CSI"
+requires-python = ">=3.10"
+dependencies = [
+    "pyserial>=3.5",
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "scipy>=1.10",
+    "matplotlib>=3.7",
+    "paho-mqtt>=1.6",
+    "tabulate>=0.9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4"]
+influx = ["influxdb-client>=1.36"]
+
+[project.scripts]
+csi-capture = "csi_sensing.capture:main"
+csi-synth = "csi_sensing.synth:main"
+csi-heatmap = "csi_sensing.plots.plot_heatmap:main"
+csi-diagnostic = "csi_sensing.plots.plot_diagnostic:main"
+csi-respiration-plot = "csi_sensing.plots.plot_respiration:main"
+csi-presence = "csi_sensing.presence:main"
+csi-respiration = "csi_sensing.respiration:main"
+csi-characterize = "analysis.characterize:main"
+csi-live = "csi_sensing.deploy.pipeline_live:main"
+csi-mqtt = "csi_sensing.deploy.mqtt_publish:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["csi_sensing", "analysis"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]
