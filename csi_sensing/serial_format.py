@@ -1,19 +1,24 @@
 """Parse one line of esp-csi serial output.
 
 THE FIELD ORDER BELOW IS A DEFAULT, NOT GROUND TRUTH.
-It matches the `csi_recv` example of espressif/esp-csi as of ESP-IDF v5.3.x. The
-layout has changed between esp-csi revisions. During Phase 1 bring-up (step 9),
-capture a real line with `idf.py monitor`, compare it field-by-field against
-`FIELD_SPEC`, and edit this one list if it differs. Everything downstream reads
-through this module, so this is the only place that needs to change.
+It matches the `csi_recv` get-started example of espressif/esp-csi (rev 8633d67,
+ESP32 / non-C6 branch) **with the local patch applied** (see
+`firmware/patches/` -- the patch adds `agc_gain` + `fft_gain`, which the stock
+ESP32 branch does not print, and switches the link to HT20 on a fixed channel).
 
-Expected line shape (one CSV row, trailing field is a bracketed int8 list):
+During Phase 1 bring-up, capture a real line with `csi-capture --dump-raw` and
+compare it field-by-field against `FIELD_SPEC`. Edit this one list if it differs
+-- everything downstream reads through this module.
 
-    CSI_DATA,123,7c:9e:bd:...,-42,11,1,0,0,1,1,0,0,0,1,-95,0,6,0,140736,0,128,0,52,11,128,0,"[13 -7 12 ...]"
+Stock ESP32 header line (before the patch, for reference):
 
-The bracketed list holds `len` signed 8-bit values, two per subcarrier. The pair
-order (imag,real) vs (real,imag) is NOT resolved here -- csi_io derives it from
-the data.
+    type,id,mac,rssi,rate,sig_mode,mcs,bandwidth,smoothing,not_sounding,
+    aggregation,stbc,fec_coding,sgi,noise_floor,ampdu_cnt,channel,
+    secondary_channel,local_timestamp,ant,sig_len,rx_format,len,first_word,data
+
+The patch inserts `agc_gain,fft_gain` just before `len`. The trailing `data`
+field is a bracketed list of `len` signed 8-bit values, two per subcarrier; the
+pair order (imag,real vs real,imag) is NOT resolved here -- csi_io derives it.
 """
 from __future__ import annotations
 
@@ -23,13 +28,13 @@ from typing import Callable, Optional
 # name, converter. The final "data" field is handled specially.
 FIELD_SPEC: list[tuple[str, Callable[[str], object]]] = [
     ("type", str),
-    ("seq", int),
+    ("id", int),                 # rx_id -- packet counter from the sender payload
     ("mac", str),
     ("rssi", int),
     ("rate", int),
     ("sig_mode", int),
     ("mcs", int),
-    ("bandwidth", int),
+    ("bandwidth", int),          # rx_ctrl.cwb: 0 = 20 MHz, 1 = 40 MHz
     ("smoothing", int),
     ("not_sounding", int),
     ("aggregation", int),
@@ -40,14 +45,14 @@ FIELD_SPEC: list[tuple[str, Callable[[str], object]]] = [
     ("ampdu_cnt", int),
     ("channel", int),
     ("secondary_channel", int),
-    ("local_timestamp", int),
+    ("local_timestamp", int),    # esp-side microseconds
     ("ant", int),
     ("sig_len", int),
-    ("rx_state", int),
-    ("agc_gain", int),
-    ("fft_gain", int),
-    ("len", int),
-    ("first_word_invalid", int),
+    ("rx_format", int),          # stock branch prints sig_mode again in this slot
+    ("agc_gain", int),           # ADDED BY PATCH -- required for amplitude normalization
+    ("fft_gain", int),           # ADDED BY PATCH
+    ("len", int),                # number of int8 CSI values (2 per subcarrier)
+    ("first_word", int),         # first_word_invalid flag
 ]
 
 DATA_FIELD = "data"

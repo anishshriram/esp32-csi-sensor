@@ -18,13 +18,28 @@ Two stages. **Stage A** (host software) is built and validated on synthetic CSI.
 
 Synthetic demo data in `data/SYNTH_*`, figures in `results/`.
 
-## Stage B -- real hardware & phase gates  ⏳ not started
+## Stage B -- real hardware & phase gates  ⏳ in progress
 
 Each ends at an **approval checkpoint**.
 
-- [ ] **9. Phase 1 gate** -- `bootstrap_esp_idf.sh`; flash tx (SoftAP) + rx (STA);
-      confirm CSI stream; fill real serial format into `serial_format.FIELD_SPEC`;
-      re-run `test_serial_format.py` against real lines.
+- [~] **9. Phase 1 gate** -- toolchain + firmware + CSI stream
+  - [x] ESP-IDF v5.3.1 installed (`~/esp/esp-idf`); needed an `SSL_CERT_FILE`
+        workaround for the framework Python -- now baked into `bootstrap_esp_idf.sh`
+  - [x] esp-csi cloned (`~/esp/esp-csi`, rev 8633d67)
+  - [x] Read the real `csi_recv`/`csi_send` source. Findings: the get-started
+        examples use a **dedicated ESP-NOW link** (not SoftAP -- still satisfies
+        the "no router" constraint), default **HT40 on channel 11**, and the
+        ESP32 CSV branch **does not emit `agc_gain`**.
+  - [x] `firmware/patches/0001-*.patch` (+ `apply_patches.sh`): HT20, channel 6,
+        and adds `agc_gain`/`fft_gain` to the CSV while keeping CSI raw. Applies
+        cleanly to rev 8633d67. **Gain-API call is unverified until the first
+        build** -- fallback documented in `firmware/README.md`.
+  - [x] `serial_format.FIELD_SPEC` + synth updated to the real post-patch header;
+        31 tests still green.
+  - [ ] boards connected, both roles flashed, MACs recorded
+  - [ ] `idf.py monitor` shows a continuous CSI stream; real header line compared
+        to `FIELD_SPEC`; `test_serial_format.py` re-run against real lines
+  - **approval checkpoint**
 - [ ] **10. Phase 2 gate** -- three labeled recordings (`empty` / `walking` /
       `sitting`, 2 m LOS); verify packet rate; AGC diagnostic flattens; three
       heatmaps show the walking-vs-empty contrast.

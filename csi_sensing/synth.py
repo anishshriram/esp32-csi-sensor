@@ -223,7 +223,7 @@ def generate(cfg: SynthConfig) -> SynthResult:
             {
                 "host_ts": host_t0 + t,
                 "type": "CSI_DATA",
-                "seq": seq,
+                "id": seq,
                 "mac": cfg.mac,
                 "rssi": int(-40 - (cfg.wall_atten_db if cfg.wall else 0) + rng.integers(-2, 3)),
                 "rate": 11,
@@ -243,11 +243,11 @@ def generate(cfg: SynthConfig) -> SynthResult:
                 "local_timestamp": int(t * 1e6),
                 "ant": 0,
                 "sig_len": 52,
-                "rx_state": 0,
+                "rx_format": 1,
                 "agc_gain": int(round(_agc_gain_db(t, cfg))),
                 "fft_gain": 8,
                 "len": 2 * N_SUB,
-                "first_word_invalid": 0,
+                "first_word": 0,
                 "data": " ".join(str(int(v)) for v in interleaved),
             }
         )

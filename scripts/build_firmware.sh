@@ -3,9 +3,8 @@
 #
 #   scripts/build_firmware.sh <example_dir> <port> [tx|rx]
 #
-# <example_dir> is the esp-csi example project directory (see clone_esp_csi.sh).
-# Copy firmware/sdkconfig.defaults.<role> into it as sdcconfig.defaults first, or
-# run `idf.py menuconfig` and match the matrix in firmware/README.md.
+# <example_dir> is an esp-csi example project (e.g. .../get-started/csi_recv).
+# Run firmware/apply_patches.sh first (HT20 + channel + agc_gain).
 set -euo pipefail
 
 EXAMPLE_DIR="${1:?usage: build_firmware.sh <example_dir> <port> [tx|rx]}"
@@ -20,10 +19,12 @@ fi
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$EXAMPLE_DIR"
 
-if [ -f "$REPO_ROOT/firmware/sdkconfig.defaults.$ROLE" ]; then
-  cp "$REPO_ROOT/firmware/sdkconfig.defaults.$ROLE" ./sdkconfig.defaults
+# merge our Kconfig defaults into the example's own (append; our keys win)
+DEF="$REPO_ROOT/firmware/sdkconfig.defaults.$ROLE"
+if [ -f "$DEF" ] && ! grep -q "csi-sensor merged" sdkconfig.defaults 2>/dev/null; then
+  { echo ""; echo "# --- csi-sensor merged ---"; cat "$DEF"; } >> sdkconfig.defaults
   rm -f sdkconfig
-  echo "applied firmware/sdkconfig.defaults.$ROLE"
+  echo "merged $DEF into sdkconfig.defaults"
 fi
 
 idf.py set-target esp32

@@ -19,6 +19,18 @@ cd "$ESP_DIR/esp-idf"
 git fetch --tags --quiet
 git checkout "$IDF_TAG"
 git submodule update --init --recursive
+
+# macOS python.org framework builds ship without a usable CA bundle, so the IDF
+# tool downloads fail with CERTIFICATE_VERIFY_FAILED. Point urllib at certifi's
+# bundle for the install (scoped -- no system change).
+if [ -z "${SSL_CERT_FILE:-}" ]; then
+  CERTIFI_PEM="$(python3 -m certifi 2>/dev/null || true)"
+  if [ -n "$CERTIFI_PEM" ] && [ -f "$CERTIFI_PEM" ]; then
+    export SSL_CERT_FILE="$CERTIFI_PEM"
+    echo "using SSL_CERT_FILE=$SSL_CERT_FILE for tool downloads"
+  fi
+fi
+
 ./install.sh esp32
 
 cat <<'EOF'
