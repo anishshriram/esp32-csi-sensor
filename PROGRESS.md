@@ -61,12 +61,19 @@ Each ends at an **approval checkpoint**.
   - **approval checkpoint** -- recordings collected, gate demonstrated. Longer
     labeled sessions (15-30 min mixed, entry/exit log) still needed for a
     scored Phase 3 accuracy/latency number.
-- [ ] **10. Phase 2 gate** -- three labeled recordings (`empty` / `walking` /
-      `sitting`, 2 m LOS); verify packet rate; AGC diagnostic flattens; three
-      heatmaps show the walking-vs-empty contrast.
-- [ ] **11. Phase 3 gate** -- threshold from the real `empty` floor; 15-30 min
+- [x] **10. Phase 2 gate** -- three labeled recordings (3.86 m LOS); ~90 Hz;
+      heatmaps show the walking-vs-empty contrast; motion score ~5x.
+- [~] **11. Phase 3 gate** -- threshold from the real `empty` floor; 15-30 min
       mixed session with entry/exit log; report accuracy / FPR / FNR / latency,
       walking vs sitting separately.
+      - First 20-min session FAILED: link dropped at t~67 s, receiver caught only
+        sporadic bursts for ~14 min (transmitter kept sending -- ids monotonic,
+        no reboot); fine again right after. Intermittent RF -- likely ch-6
+        congestion or a long-run RX issue.
+      - `capture.py` now aborts after 20 s of no CSI (was: ran the full 25 min
+        for nothing) and warns below 60 Hz.
+      - Operator log kept for the retry. Retry plan: rescan 1/6/11, move channel
+        if needed; split into ~4-min segments so a drop costs 20 s not the run.
 - [ ] **12. Phase 4 gate** -- Phyphox on sternum; deep-breath sync event;
       metronome sessions at 10/12/15/18/20 bpm; report MAE per rate and overall.
 - [ ] **13. Phase 5 gate** -- repeat set through one interior wall, distance sweep

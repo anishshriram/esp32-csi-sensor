@@ -28,6 +28,7 @@ from csi_sensing.serial_format import ParseStats, parse_line
 
 BAUD = 921_600
 FLUSH_EVERY = 100
+STALL_ABORT_S = 20.0   # abort if no CSI for this long -- link dropped
 
 
 def _firmware_sha() -> str:
@@ -136,6 +137,8 @@ def capture(port: str, duration: float, out_path: str, meta: dict,
             ser.reset_input_buffer()
             t_start = time.time()
 
+        last_csi_ts = time.time()
+        stalled = False
         try:
             while True:
                 if line_iter is not None:
@@ -143,12 +146,21 @@ def capture(port: str, duration: float, out_path: str, meta: dict,
                     if line is None:
                         break
                 else:
-                    if time.time() - t_start >= duration:
+                    now = time.time()
+                    if now - t_start >= duration:
+                        break
+                    if now - last_csi_ts > STALL_ABORT_S:
+                        stalled = True
+                        print(f"\nABORT: no CSI for {STALL_ABORT_S:.0f}s at "
+                              f"t={now - t_start:.0f}s -- link dropped "
+                              f"(interference? transmitter down?). Stopping.")
                         break
                     raw = ser.readline()
                     if not raw:
                         continue
                     line = raw.decode("utf-8", errors="replace")
+                    if line.startswith("CSI_DATA"):
+                        last_csi_ts = time.time()
 
                 host_ts = time.time()
                 if raw_fh is not None:
@@ -181,6 +193,7 @@ def capture(port: str, duration: float, out_path: str, meta: dict,
         "mean_pkt_rate_hz": rate,
         "malformed": stats.malformed,
         "non_csi_lines": stats.non_csi,
+        "stalled": bool(_source_lines is None and stalled),
     }
     print("\n" + "=" * 52)
     print(f"  rows written      : {rows_written}")
@@ -188,11 +201,12 @@ def capture(port: str, duration: float, out_path: str, meta: dict,
     print(f"  MEAN PACKET RATE  : {rate:.1f} Hz")
     print(f"  malformed lines   : {stats.malformed}")
     print(f"  non-CSI lines     : {stats.non_csi}")
+    if summary["stalled"]:
+        print("  STATUS            : ABORTED -- link stalled, recording incomplete")
     print("=" * 52)
-    exp = duration * 100
-    if _source_lines is None and rows_written < 0.7 * exp:
-        print("  WARNING: row count far below 100 Hz expectation -- packet loss;")
-        print("           fix before continuing (lower sample rate or channel).")
+    if _source_lines is None and not stalled and rate < 60:
+        print("  WARNING: mean packet rate below 60 Hz -- packet loss;")
+        print("           rescan channels (1/6/11) and pick the quietest.")
     return summary
 
 
