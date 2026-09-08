@@ -95,6 +95,23 @@ def open_serial(port: str):
                  f"(is `idf.py monitor` still running? is the board plugged in?)")
 
 
+def _inhibit_sleep():
+    """Keep the machine awake for the duration of the capture. Returns a Popen to
+    terminate, or None. macOS: `caffeinate`. Linux: `systemd-inhibit` if present.
+    A sleeping host freezes the read loop while wall-clock time marches on --
+    the recording ends up with multi-minute gaps."""
+    pid = os.getpid()
+    for cmd in (["caffeinate", "-dimsu", "-w", str(pid)],
+                ["systemd-inhibit", "--what=sleep:idle", "--why=csi-capture",
+                 "--mode=block", "tail", "-f", "/dev/null"]):
+        try:
+            return subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except FileNotFoundError:
+            continue
+    print("  note: could not inhibit sleep -- disable system sleep manually for long captures")
+    return None
+
+
 def capture(port: str, duration: float, out_path: str, meta: dict,
             dump_raw: Optional[str] = None, _source_lines=None) -> dict:
     """Run the capture loop. `_source_lines` (an iterable of str) overrides the
@@ -102,6 +119,7 @@ def capture(port: str, duration: float, out_path: str, meta: dict,
     stats = ParseStats()
     rows_written = 0
     t_start = time.time()
+    keep_awake = _inhibit_sleep() if _source_lines is None else None
 
     raw_fh: Optional[TextIO] = open(dump_raw, "w") if dump_raw else None
     with open(out_path, "w", newline="") as fh:
@@ -180,6 +198,8 @@ def capture(port: str, duration: float, out_path: str, meta: dict,
                 ser.close()
             if raw_fh is not None:
                 raw_fh.close()
+            if keep_awake is not None:
+                keep_awake.terminate()
 
     elapsed = time.time() - t_start
     rate = rows_written / elapsed if elapsed > 0 else float("nan")
