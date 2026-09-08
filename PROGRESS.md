@@ -66,14 +66,30 @@ Each ends at an **approval checkpoint**.
 - [~] **11. Phase 3 gate** -- threshold from the real `empty` floor; 15-30 min
       mixed session with entry/exit log; report accuracy / FPR / FNR / latency,
       walking vs sitting separately.
-      - First 20-min session FAILED: link dropped at t~67 s, receiver caught only
-        sporadic bursts for ~14 min (transmitter kept sending -- ids monotonic,
-        no reboot); fine again right after. Intermittent RF -- likely ch-6
-        congestion or a long-run RX issue.
-      - `capture.py` now aborts after 20 s of no CSI (was: ran the full 25 min
-        for nothing) and warns below 60 Hz.
-      - Operator log kept for the retry. Retry plan: rescan 1/6/11, move channel
-        if needed; split into ~4-min segments so a drop costs 20 s not the run.
+      - **3 failed 20-min attempts.** Root causes found and mostly fixed:
+        1. Take 1 -- the **Mac slept** (two gaps, 837 s + 586 s). Fixed:
+           `capture.py` runs `caffeinate` for the recording.
+        2. Take 2 -- **receiver UART saturated**: the full 256-int8 line at
+           94 Hz is ~87 KB/s = 94% of the 921600-baud link; it backs up after
+           ~100 s and stalls the CSI callback. Fixed: patch emits only the
+           HT-LTF half (128 int8, ~43 KB/s). Held a clean 3-min empty test.
+        3. Take 3 -- got 3 min 14 s (vs ~1.5 min before), then the
+           **transmitter crashed**: `csi_send` was sending at a full 100/s
+           right up to a hard stop. The stock example fires `esp_now_send` to
+           broadcast at 100 Hz with **no send-completion callback** -- a known
+           way to deadlock ESP-NOW TX buffers under sustained load. NOT yet
+           fixed (needs the tx board back on the bench to patch csi_send).
+      - `capture.py` also aborts after 20 s of dead air (was: ran the full
+        25 min collecting nothing) and warns below 60 Hz.
+      - Partial data kept: `data/mixed_partial_los_3m9_*` -- 194 s with a sync
+        wave at t~60 s and ~1 min of walking. Enough to confirm the pipeline
+        (walking motion-score ~6x empty) but too short for a scored number.
+      - Operator log (sync 20:38, walk 20:39-20:40) noted for the redo.
+
+  **Next session:** bring BOTH boards to the Mac. Patch `csi_send`: register
+  `esp_now_register_send_cb` (drain the queue) and/or drop `CONFIG_SEND_FREQUENCY`
+  to 50. Verify a 20-min run holds with `csi-capture`. Then redo the mixed
+  session, then Phase 4 (Phyphox).
 - [ ] **12. Phase 4 gate** -- Phyphox on sternum; deep-breath sync event;
       metronome sessions at 10/12/15/18/20 bpm; report MAE per rate and overall.
 - [ ] **13. Phase 5 gate** -- repeat set through one interior wall, distance sweep

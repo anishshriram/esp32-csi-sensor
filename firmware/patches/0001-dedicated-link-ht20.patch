@@ -1,5 +1,5 @@
 diff --git a/examples/get-started/csi_recv/main/app_main.c b/examples/get-started/csi_recv/main/app_main.c
-index 4932cd2..d71ad6b 100644
+index 4932cd2..0410e1e 100644
 --- a/examples/get-started/csi_recv/main/app_main.c
 +++ b/examples/get-started/csi_recv/main/app_main.c
 @@ -26,7 +26,7 @@
@@ -24,14 +24,31 @@ index 4932cd2..d71ad6b 100644
  #define CONFIG_ESP_NOW_RATE             WIFI_PHY_RATE_MCS0_LGI
  #define CONFIG_FORCE_GAIN                   0
  
-@@ -253,8 +253,8 @@ static void wifi_csi_init()
+@@ -200,8 +200,14 @@ static void wifi_csi_rx_cb(void *ctx, wifi_csi_info_t *info)
+         ets_printf(",%d", (int16_t)(compensate_gain * csi));
+     }
+ #else
+-    ets_printf(",%d,%d,\"[%d", info->len, info->first_word_invalid, (int16_t)(compensate_gain * info->buf[0]));
+-    for (int i = 1; i < info->len; i++) {
++    /* PATCH: emit only the HT-LTF half when both LTFs are present. The full
++       256-int8 line at ~94 Hz is ~87 KB/s, ~94%% of the 921600-baud UART -- it
++       backs up after ~100 s and stalls the CSI callback. The HT-LTF half is all
++       the host uses. */
++    int csi_start = (info->len >= 256) ? info->len / 2 : 0;
++    int csi_out_len = info->len - csi_start;
++    ets_printf(",%d,%d,\"[%d", csi_out_len, info->first_word_invalid, (int16_t)(compensate_gain * info->buf[csi_start]));
++    for (int i = csi_start + 1; i < info->len; i++) {
+         ets_printf(",%d", (int16_t)(compensate_gain * info->buf[i]));
+     }
+ #endif
+@@ -253,8 +259,8 @@ static void wifi_csi_init()
          .stbc_htltf2_en    = true,
          .ltf_merge_en      = true,
          .channel_filter_en = true,
 -        .manu_scale        = false,
 -        .shift             = false,
-+        .manu_scale        = false,  /* PATCH: keep auto-scale (manual shift saturated); revisit if steps appear */
-+        .shift             = 0,
++        .manu_scale        = true,   /* PATCH: fixed scale for a cleaner int8 range */
++        .shift             = 3,      /* PATCH: tuned for RSSI ~-28 link */
      };
  #endif
      ESP_ERROR_CHECK(esp_wifi_set_csi_config(&csi_config));

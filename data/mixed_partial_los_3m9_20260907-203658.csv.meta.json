@@ -1,0 +1,14 @@
+{
+  "label": "mixed",
+  "channel": 6,
+  "board_separation_m": 3.86,
+  "wall_present": false,
+  "subject_position": "20 min mixed session take 3: empty/walking/sitting, operator logging transitions; sync arm-waves at start",
+  "start_time": 1788827818.569524,
+  "firmware_sha": "unknown",
+  "notes": "HT-LTF-only + manu_scale shift=3; boards ~12ft8in apart ~4ft high; antennas vertical parallel; ch6 ESP-NOW HT20; Phase 3 scoring session; host sleep inhibited",
+  "synthetic": false,
+  "rows": 18524,
+  "duration_s": 214.46700811386108,
+  "mean_pkt_rate_hz": 86.37225913164957
+}
