@@ -63,9 +63,9 @@ Each ends at an **approval checkpoint**.
     scored Phase 3 accuracy/latency number.
 - [x] **10. Phase 2 gate** -- three labeled recordings (3.86 m LOS); ~90 Hz;
       heatmaps show the walking-vs-empty contrast; motion score ~5x.
-- [~] **11. Phase 3 gate** -- threshold from the real `empty` floor; 15-30 min
+- [x] **11. Phase 3 gate** -- threshold from the real `empty` floor; 15-30 min
       mixed session with entry/exit log; report accuracy / FPR / FNR / latency,
-      walking vs sitting separately.
+      walking vs sitting separately. MET 2026-09-16 (see below).
       - **3 failed 20-min attempts.** Root causes found and mostly fixed:
         1. Take 1 -- the **Mac slept** (two gaps, 837 s + 586 s). Fixed:
            `capture.py` runs `caffeinate` for the recording.
@@ -86,10 +86,35 @@ Each ends at an **approval checkpoint**.
         (walking motion-score ~6x empty) but too short for a scored number.
       - Operator log (sync 20:38, walk 20:39-20:40) noted for the redo.
 
-  **Next session:** bring BOTH boards to the Mac. Patch `csi_send`: register
-  `esp_now_register_send_cb` (drain the queue) and/or drop `CONFIG_SEND_FREQUENCY`
-  to 50. Verify a 20-min run holds with `csi-capture`. Then redo the mixed
-  session, then Phase 4 (Phyphox).
+  **2026-09-16 -- Phase 3 gate MET.** Root cause of the take-3 crash turned out
+  to be power, not the missing send callback: with both boards on Mac USB power
+  it ran clean for 6+ min on the desk, and clean for 2 min at 3.86 m range on a
+  wall adapter. No `csi_send` patch was needed. Take 4 (20 min, real 3.86 m
+  link, tx on wall power, rx raised to ~4 ft) completed in full: 112,065 rows,
+  93.4 Hz, only 8 malformed / 8 non-CSI out of 112k.
+
+  Scored against the operator log (wave 14:30; walking 14:31-32 and 14:39-40;
+  still 14:33-34, 14:36-37, 14:43-45; empty otherwise; threshold calibrated
+  from the trailing confirmed-empty tail):
+
+  |                     | variance-only | +respiration-assist |
+  |---------------------|--------------:|---------------------:|
+  | overall accuracy    | 77.3%         | 74.3%                 |
+  | false positive rate | 8.6%          | 28.8%                 |
+  | false negative rate | 55.4%         | 18.6%                 |
+  | detection latency   | 15.6 s        | 7.4 s                 |
+  | clearance latency   | 10.3 s        | 20.5 s                |
+  | walking detected    | 72%           | 73%                   |
+  | still detected      | 31%           | 86%                   |
+
+  Confirms the documented pattern: variance alone is solid for walking, weak
+  for a still subject; the respiration-band assist recovers most of the still
+  cases at the cost of more false positives elsewhere. Ground truth is
+  approximate (~1 min log precision), so this is a first real-data estimate,
+  not a tight bound -- worth re-scoring with a stopwatch-precision log later.
+
+  **Next session:** Phase 4 (Phyphox) -- phone on sternum, deep-breath sync
+  event, metronome sessions at 10/12/15/18/20 bpm.
 - [ ] **12. Phase 4 gate** -- Phyphox on sternum; deep-breath sync event;
       metronome sessions at 10/12/15/18/20 bpm; report MAE per rate and overall.
 - [ ] **13. Phase 5 gate** -- repeat set through one interior wall, distance sweep

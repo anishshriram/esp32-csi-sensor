@@ -1,0 +1,14 @@
+{
+  "label": "mixed",
+  "channel": 6,
+  "board_separation_m": 3.86,
+  "wall_present": false,
+  "subject_position": "20 min mixed session take 4: empty/walking/still, operator logging transitions; sync arm-waves at start; receiver raised to ~4ft",
+  "start_time": 1789583392.9570382,
+  "firmware_sha": "unknown",
+  "notes": "post HT-LTF fix; tx on wall power at range verified stable; rx height adjusted ~4ft",
+  "synthetic": false,
+  "rows": 112065,
+  "duration_s": 1200.0069961547852,
+  "mean_pkt_rate_hz": 93.38695554200343
+}
